@@ -20,7 +20,7 @@ mod process;
 
 use fs::*;
 use process::*;
-/// handle syscall exception with `syscall_id` and other arguments
+/// 使用 syscall_id 及其他参数来处理系统调用异常
 pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
     match syscall_id {
         SYSCALL_WRITE => sys_write(args[0], args[1] as *const u8, args[2]),

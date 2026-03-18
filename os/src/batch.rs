@@ -29,9 +29,13 @@ static USER_STACK: UserStack = UserStack {
 };
 
 impl KernelStack {
+
+    /// 获取栈指针(栈底地址)
     fn get_sp(&self) -> usize {
         self.data.as_ptr() as usize + KERNEL_STACK_SIZE
     }
+
+    /// 压入上下文，并且返回上下文地址
     pub fn push_context(&self, cx: TrapContext) -> &'static mut TrapContext {
         let cx_ptr = (self.get_sp() - core::mem::size_of::<TrapContext>()) as *mut TrapContext;
         unsafe {
@@ -47,13 +51,21 @@ impl UserStack {
     }
 }
 
+/// 应用管理器数据结构
 struct AppManager {
+    /// 实际加载的应用数量
     num_app: usize,
+
+    /// 当前运行的APP
     current_app: usize,
+
+    /// 每个应用的起始地址和结尾地址
     app_start: [usize; MAX_APP_NUM + 1],
 }
 
 impl AppManager {
+
+    /// 打印APP地址信息
     pub fn print_app_info(&self) {
         println!("[kernel] num_app = {}", self.num_app);
         for i in 0..self.num_app {
@@ -66,14 +78,18 @@ impl AppManager {
         }
     }
 
+    /// 加载APP
     unsafe fn load_app(&self, app_id: usize) {
+
+        // 所有程序执行完毕，退出
         if app_id >= self.num_app {
             println!("All applications completed!");
             use crate::board::QEMUExit;
             crate::board::QEMU_EXIT_HANDLE.exit_success();
         }
         println!("[kernel] Loading app_{}", app_id);
-        // clear app area
+
+        // 为APP分配内存
         core::slice::from_raw_parts_mut(APP_BASE_ADDRESS as *mut u8, APP_SIZE_LIMIT).fill(0);
         let app_src = core::slice::from_raw_parts(
             self.app_start[app_id] as *const u8,
@@ -81,12 +97,10 @@ impl AppManager {
         );
         let app_dst = core::slice::from_raw_parts_mut(APP_BASE_ADDRESS as *mut u8, app_src.len());
         app_dst.copy_from_slice(app_src);
-        // Memory fence about fetching the instruction memory
-        // It is guaranteed that a subsequent instruction fetch must
-        // observes all previous writes to the instruction memory.
-        // Therefore, fence.i must be executed after we have loaded
-        // the code of the next app into the instruction memory.
-        // See also: riscv non-priv spec chapter 3, 'Zifencei' extension.
+        // 关于获取指令内存的内存屏障
+        // 可以确保后续的指令获取，观察到之前所有对指令内存的写入
+        // 因此，将下一个应用程序的代码加载到指令内存之后，必须执行fence.i指令
+        // 另请参阅：RISC-V 非特权规范第 3 章，Zifencei扩展
         asm!("fence.i");
     }
 
